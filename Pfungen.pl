@@ -10,7 +10,13 @@ open(my $kml, '>:encoding(utf-8)', 'Pfungen.kml') or die;
 start_kml('Pfungen.kml');
 
 draw_admin_borders();
-draw_highway_track();
+draw_ways_of_key_val('highway', 'track'  , 'track'  );
+
+  draw_ways_of_key_val('highway', 'footway', 'footway');
+# draw_ways_of_key_val('highway', 'service', 'service');
+  draw_ways_of_key_val('highway', 'path'   , 'path'   );
+# ele();
+notes();
 
 
 print $kml "</Folder></Document></kml>";
@@ -24,7 +30,17 @@ sub start_kml { #_{
 <Document>
 	<name>$name</name>
 
-  <Style id="border"><LineStyle><color>ff0000ff</color><width>5</width></LineStyle></Style>
+  <Style id="border"  ><LineStyle><color>ff0000ff</color><width>5</width></LineStyle></Style>
+  <Style id="track"   ><LineStyle><color>ffeeaa22</color><width>2</width></LineStyle></Style>
+  <Style id="footway" ><LineStyle><color>ffaadd22</color><width>2</width></LineStyle></Style>
+  <Style id="path"    ><LineStyle><color>ff33ff44</color><width>2</width></LineStyle></Style>
+  <Style id="footway" ><LineStyle><color>ff44ff33</color><width>2</width></LineStyle></Style>
+  <Style id="service" ><LineStyle><color>ff99aacb</color><width>2</width></LineStyle></Style>
+
+  <Style id="white_line" ><LineStyle><color>ffffffff</color><width>2</width></LineStyle></Style>
+
+	<Style id="admin_centre"> <IconStyle> <scale>2.0</scale> <Icon> <href>http://maps.google.com/mapfiles/kml/pushpin/red-pushpin.png</href> </Icon> <hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/> </IconStyle> </Style>
+	<Style id="elevation"   > <IconStyle> <scale>1.0</scale> <Icon> <href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href> </Icon> <hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/> </IconStyle> </Style>
 
 
 	<StyleMap id="m_ylw-pushpin"> <Pair> <key>normal</key> <styleUrl>#s_ylw-pushpin0</styleUrl> </Pair> <Pair> <key>highlight</key> <styleUrl>#s_ylw-pushpin_hl</styleUrl> </Pair> </StyleMap>
@@ -49,14 +65,62 @@ E
 
 } #_}
 
-sub draw_admin_borders {
-  draw_relation(1682188, 'border'); # Border of Pfungen
-}
 
-sub draw_highway_track {
+sub draw_admin_borders { #_{
+  draw_relation(1682188, 'border'); # Border of Pfungen
+} #_}
+
+sub ele { #_{
+
+  start_folder('Elevation');
+
+  query_key('ele');
+
+  end_folder();
+
+} #_}
+
+sub notes { #_{
+
+  start_folder('Notes');
+
+  query_key('note');
+
+  end_folder();
+
+} #_}
+
+sub query_key { #_{
+  my $key = shift;
+
+  my $sth = $dbh -> prepare("select nod_id, way_id, rel_id, val from tag where key = ?");
+  $sth -> execute($key);
+  while (my $rec = $sth->fetchrow_hashref) {
+
+    if (defined $rec-> {nod_id}) {
+      draw_node($rec->{nod_id}, 'elevation', $rec->{val});
+    }
+    elsif (defined $rec->{way_id}) {
+      draw_way($rec->{way_id}, 'white_line', {desc => $rec->{val}});
+    }
+    else {
+      printf("yyy\n");
+    }
+
+
+  }
+
+} #_}
+
+sub draw_ways_of_key_val { #_{
+  my $key      = shift;
+  my $val      = shift;
+  my $style_id = shift;
 
   my $sth = $dbh -> prepare('select way_id from tag where key = ? and val = ?') or die;
-  $sth->execute('highway', 'track') or die;
+  $sth->execute($key, $val) or die;
+
+  start_folder($style_id);
 
   while (my $rec = $sth -> fetchrow_hashref) {
 #   print "$rec->{way_id}\n";
@@ -65,12 +129,14 @@ sub draw_highway_track {
       print "way id not defined\n";
     }
     else{
-      draw_way($rec->{way_id}, 'm_ylw-pushpin0');
+      draw_way($rec->{way_id}, $style_id);
     }
 
   }
 
-}
+  end_folder();
+
+} #_}
 
 sub draw_relation { #_{
   my $rel_id = shift;
@@ -81,7 +147,7 @@ sub draw_relation { #_{
 
   while (my $rec = $sth->fetchrow_hashref) {
   if ($rec->{rol} eq 'admin_centre') {
-    draw_node($rec->{nod_id});
+    draw_node($rec->{nod_id}, 'admin_centre', 'Pfungen');
   }
   elsif ($rec->{rol} eq 'outer') {
 
@@ -104,10 +170,17 @@ sub draw_relation { #_{
 sub draw_way { #_{
   my $way_id = shift;
   my $style_id = shift;
+  my $opts     = shift // {};
+
+  my $description ='';
+  if (my $desc = delete $opts->{desc}) {
+    $description = "<description>$desc</description>";
+  }
 
   print $kml "
 			<Placemark>
-       <name>???</name>
+       <name>$way_id</name>
+       $description
 				<styleUrl>#$style_id</styleUrl>
 				<LineString>
 					<tessellate>1</tessellate>
@@ -144,6 +217,8 @@ sub draw_way { #_{
 
 sub draw_node { #_{
   my $nod_id = shift;
+  my $style_id = shift;
+  my $text     = shift;
 
   my $sth = $dbh -> prepare('select lat, lon from nod where id = ?');
   $sth -> execute($nod_id);
@@ -154,19 +229,20 @@ sub draw_node { #_{
     lon => $rec->{lon},
   };
 
-  push_pin($coord, 'Pfungen');
+  push_pin($coord, $text, $style_id);
 
 } #_}
 
 sub push_pin { #_{
   my $coord = shift;
   my $name  = shift;
+  my $style_id = shift;
 
   print $kml "
 
 			<Placemark>
         <name>$name</name>
-				<styleUrl>#m_ylw-pushpin</styleUrl>
+				<styleUrl>#$style_id</styleUrl>
 				<Point>
 					<gx:drawOrder>1</gx:drawOrder>
           <coordinates>$coord->{lon}, $coord->{lat}</coordinates>
@@ -174,4 +250,13 @@ sub push_pin { #_{
 			</Placemark>
   ";
 
+} #_}
+
+sub start_folder { #_{
+  my $name = shift;
+  print $kml "<Folder><name>$name</name><open>0</open>";
+} #_}
+
+sub end_folder { #_{
+  print $kml "</Folder>";
 } #_}
