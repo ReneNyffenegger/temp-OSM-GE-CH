@@ -23,6 +23,10 @@ sub start_kml { #_{
 <kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
 <Document>
 	<name>$name</name>
+
+  <Style id="border"><LineStyle><color>ff0000ff</color><width>5</width></LineStyle></Style>
+
+
 	<StyleMap id="m_ylw-pushpin"> <Pair> <key>normal</key> <styleUrl>#s_ylw-pushpin0</styleUrl> </Pair> <Pair> <key>highlight</key> <styleUrl>#s_ylw-pushpin_hl</styleUrl> </Pair> </StyleMap>
 	<Style id="s_ylw-pushpin_hl"> <IconStyle> <scale>1.3</scale> <Icon> <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href> </Icon> <hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/> </IconStyle> </Style>
 	<StyleMap id="m_ylw-pushpin0"> <Pair> <key>normal</key> <styleUrl>#s_ylw-pushpin</styleUrl> </Pair> <Pair> <key>highlight</key> <styleUrl>#s_ylw-pushpin_hl0</styleUrl> </Pair> </StyleMap>
@@ -46,7 +50,7 @@ E
 } #_}
 
 sub draw_admin_borders {
-  draw_relation(1682188); # Border of Pfungen
+  draw_relation(1682188, 'border'); # Border of Pfungen
 }
 
 sub draw_highway_track {
@@ -55,13 +59,13 @@ sub draw_highway_track {
   $sth->execute('highway', 'track') or die;
 
   while (my $rec = $sth -> fetchrow_hashref) {
-    print "$rec->{way_id}\n";
+#   print "$rec->{way_id}\n";
 
     if (not defined $rec->{way_id}) {
       print "way id not defined\n";
     }
     else{
-      draw_way($rec->{way_id});
+      draw_way($rec->{way_id}, 'm_ylw-pushpin0');
     }
 
   }
@@ -82,7 +86,7 @@ sub draw_relation { #_{
   elsif ($rec->{rol} eq 'outer') {
 
     if (defined $rec->{way_id}) {
-      draw_way($rec->{way_id});
+      draw_way($rec->{way_id}, 'border');
     }
     else {
       print "huh, way id\n";
@@ -99,11 +103,12 @@ sub draw_relation { #_{
 
 sub draw_way { #_{
   my $way_id = shift;
+  my $style_id = shift;
 
   print $kml "
 			<Placemark>
        <name>???</name>
-				<styleUrl>#m_ylw-pushpin0</styleUrl>
+				<styleUrl>#$style_id</styleUrl>
 				<LineString>
 					<tessellate>1</tessellate>
 					<coordinates>
